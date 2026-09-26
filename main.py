@@ -219,6 +219,19 @@ def main(
         max_tokens=base_cfg.max_tokens,
         extra=base_cfg.extra,
     )
+
+    if not model_config.api_key:
+        typer.secho(
+            "\n❌ Error: No API key provided!\n"
+            "Please set your API credential before running the harness:\n\n"
+            "   export AI_API_KEY=\"your_api_key_here\"\n"
+            "   make run\n\n"
+            "Or create a .env file with: AI_API_KEY=your_api_key_here\n",
+            fg=typer.colors.RED,
+            bold=True,
+            err=True,
+        )
+        raise typer.Exit(code=1)
     orchestrator_config = OrchestratorConfig(
         model_config=model_config,
         max_retries=max_retries,
