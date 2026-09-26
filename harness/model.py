@@ -326,16 +326,41 @@ def _call_anthropic(
     create_kwargs: dict[str, Any] = {
         "model": model or config.default_model,
         "messages": messages,
-        "temperature": temperature,
         "max_tokens": max_tokens,
     }
+
+    # Dynamically adapt temperature across Anthropic SDK versions
+    import inspect
+    try:
+        sig = inspect.signature(client.messages.create)
+        if "temperature" in sig.parameters:
+            create_kwargs["temperature"] = temperature
+        elif temperature is not None:
+            create_kwargs["extra_body"] = {"temperature": temperature}
+    except Exception:
+        create_kwargs["temperature"] = temperature
+
     if system:
         create_kwargs["system"] = system
     if tools:
         create_kwargs["tools"] = tools
 
     t0 = time.perf_counter()
-    response = client.messages.create(**create_kwargs)
+    try:
+        response = client.messages.create(**create_kwargs)
+    except TypeError as exc:
+        if "temperature" in str(exc):
+            create_kwargs.pop("temperature", None)
+            if "extra_body" not in create_kwargs:
+                create_kwargs["extra_body"] = {}
+            create_kwargs["extra_body"]["temperature"] = temperature
+            try:
+                response = client.messages.create(**create_kwargs)
+            except Exception:
+                create_kwargs.pop("extra_body", None)
+                response = client.messages.create(**create_kwargs)
+        else:
+            raise
     latency_ms = (time.perf_counter() - t0) * 1000
 
     # ── Parse response content blocks ──────────────────────────
