@@ -18,6 +18,8 @@ dependencies = [
     "tree-sitter-c-sharp>=0.23",
     "tree-sitter-ruby>=0.23",
     "tree-sitter-php>=0.23",
+    "openai>=1.0.0",
+    "pytest>=7.0.0",
 ]
 
 [project.scripts]
