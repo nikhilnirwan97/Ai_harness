@@ -267,6 +267,7 @@ Verify that all unit and integration tests pass:
 
 Execute `main.py` specifying the task and target repository:
 
+#### Option A: Run Against a Local Folder
 ```bash
 ./.venv/bin/python main.py \
   "Fix format_greeting in text_utils.py so it includes a comma after Hello (e.g. 'Hello, Alice!')" \
@@ -274,9 +275,24 @@ Execute `main.py` specifying the task and target repository:
   --log test_fixtures/sample_repo/telemetry.jsonl
 ```
 
+#### Option B: Run Against a Remote Git Repository URL
+```bash
+# Auto-clones into ./cloned_repos/<repo_name>
+./.venv/bin/python main.py \
+  "Fix bug in core module" \
+  --repo https://github.com/username/project-name.git
+
+# Or redirect the clone to a specific custom folder with --dest
+./.venv/bin/python main.py \
+  "Fix bug in core module" \
+  --repo https://github.com/username/project-name.git \
+  --dest ./my_custom_workspace
+```
+
 #### CLI Options
 
-- `--repo, -r`: Path to target repository root (default: `.`).
+- `--repo, -r`: Path to local repository root OR remote git clone URL (e.g. `https://github.com/user/repo.git`, default: `.`).
+- `--dest, -d`: Destination folder to clone into when `--repo` is a remote git URL (defaults to `./cloned_repos/<repo_name>`).
 - `--model, -m`: Override model identifier.
 - `--provider, -p`: Override model provider (`openai`, `anthropic`, `google`).
 - `--max-retries`: Maximum Implement $\rightarrow$ Verify retry attempts (default: `3`).

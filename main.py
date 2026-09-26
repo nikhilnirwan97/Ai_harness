@@ -28,20 +28,81 @@ app = typer.Typer(
 )
 
 
+def _is_git_url(path_or_url: str) -> bool:
+    """Check if the provided string is a remote git URL."""
+    s = path_or_url.strip()
+    return (
+        s.startswith("http://")
+        or s.startswith("https://")
+        or s.startswith("git@")
+        or s.startswith("ssh://")
+        or (s.endswith(".git") and "/" in s)
+    )
+
+
+def _resolve_repo(repo_input: str, dest_dir: Path | None = None) -> Path:
+    """Resolve repository input to a valid local Path.
+
+    If repo_input is a remote git URL (e.g. https://github.com/org/repo.git),
+    it clones the repository into dest_dir (or ./cloned_repos/<repo_name>).
+    If repo_input is a local directory path, it validates and resolves it.
+    """
+    if _is_git_url(repo_input):
+        import re
+        import subprocess
+
+        # Extract clean repository name from URL
+        raw_name = repo_input.rstrip("/").split("/")[-1]
+        clean_name = re.sub(r"\.git$", "", raw_name) or "cloned_repo"
+
+        target_dir = dest_dir.resolve() if dest_dir else (Path.cwd() / "cloned_repos" / clean_name).resolve()
+
+        if target_dir.exists() and (target_dir / ".git").exists():
+            typer.echo(f"🔄 Using existing repository at: {target_dir}")
+        else:
+            target_dir.parent.mkdir(parents=True, exist_ok=True)
+            typer.echo(f"📥 Cloning remote repository: {repo_input}")
+            typer.echo(f"   Destination: {target_dir}...")
+            res = subprocess.run(
+                ["git", "clone", repo_input, str(target_dir)],
+                capture_output=True,
+                text=True,
+            )
+            if res.returncode != 0:
+                typer.echo(f"❌ Failed to clone repository:\n{res.stderr.strip()}", err=True)
+                raise typer.Exit(code=1)
+            typer.echo(f"✅ Successfully cloned repository to: {target_dir}")
+
+        return target_dir
+
+    local_path = Path(repo_input).resolve()
+    if not local_path.exists():
+        typer.echo(f"❌ Error: Repository directory does not exist: {local_path}", err=True)
+        raise typer.Exit(code=1)
+    if not local_path.is_dir():
+        typer.echo(f"❌ Error: Path is not a directory: {local_path}", err=True)
+        raise typer.Exit(code=1)
+
+    return local_path
+
+
 @app.command()
 def main(
     task: str = typer.Argument(
         ...,
         help="Natural-language description of the coding task.",
     ),
-    repo: Path = typer.Option(
-        Path("."),
+    repo: str = typer.Option(
+        ".",
         "--repo",
         "-r",
-        help="Path to the target repository root.",
-        exists=True,
-        file_okay=False,
-        resolve_path=True,
+        help="Path to local repository root OR remote git clone URL (e.g. https://github.com/user/repo.git).",
+    ),
+    dest: Optional[Path] = typer.Option(
+        None,
+        "--dest",
+        "-d",
+        help="Destination folder to clone into when --repo is a git URL (defaults to ./cloned_repos/<repo_name>).",
     ),
     model: Optional[str] = typer.Option(
         None,
@@ -115,7 +176,8 @@ def main(
         log_path=log_path,
     )
 
-    result = run(task, repo, orchestrator_config)
+    target_repo = _resolve_repo(repo, dest)
+    result = run(task, target_repo, orchestrator_config)
 
     # --- Print summary ---
     status = "✅ SUCCESS" if result.success else "❌ FAILED"
