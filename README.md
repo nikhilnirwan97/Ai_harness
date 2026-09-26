@@ -280,19 +280,32 @@ Execute `main.py` specifying the task and target repository:
 # Auto-clones into ./cloned_repos/<repo_name>
 ./.venv/bin/python main.py \
   "Fix bug in core module" \
-  --repo https://github.com/username/project-name.git
+  https://github.com/username/project-name.git
 
 # Or redirect the clone to a specific custom folder with --dest
 ./.venv/bin/python main.py \
   "Fix bug in core module" \
-  --repo https://github.com/username/project-name.git \
+  https://github.com/username/project-name.git \
   --dest ./my_custom_workspace
+```
+
+#### Option C: Ephemeral Hackathon Run (Zero Local Footprint + Push Back to GitHub)
+```bash
+# Automatically clones, fixes, verifies, pushes to GitHub, and wipes local files
+./.venv/bin/python main.py \
+  "Fix authentication error" \
+  https://github.com/username/project-name.git \
+  --push \
+  --cleanup
 ```
 
 #### CLI Options
 
-- `--repo, -r`: Path to local repository root OR remote git clone URL (e.g. `https://github.com/user/repo.git`, default: `.`).
+- `repo_arg` / `--repo, -r`: Path to local repository root OR remote git clone URL (e.g. `https://github.com/user/repo.git`, default: `.`).
 - `--dest, -d`: Destination folder to clone into when `--repo` is a remote git URL (defaults to `./cloned_repos/<repo_name>`).
+- `--push`: Automatically commit and push verified fixes back to the remote git repository.
+- `--push-branch`: Remote branch name to push to (e.g. `fix/agent-patch`). Defaults to current branch.
+- `--cleanup`: Delete the local cloned repository folder after execution (ephemeral run, zero local disk footprint).
 - `--model, -m`: Override model identifier.
 - `--provider, -p`: Override model provider (`openai`, `anthropic`, `google`).
 - `--max-retries`: Maximum Implement $\rightarrow$ Verify retry attempts (default: `3`).

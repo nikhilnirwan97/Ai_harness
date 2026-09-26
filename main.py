@@ -86,6 +86,38 @@ def _resolve_repo(repo_input: str, dest_dir: Path | None = None) -> Path:
     return local_path
 
 
+def _push_changes(repo_dir: Path, branch: str | None = None, commit_msg: str | None = None) -> bool:
+    """Commit applied changes and push to remote repository."""
+    import subprocess
+    msg = commit_msg or "fix: applied by autonomous coding-agent harness"
+    try:
+        subprocess.run(["git", "config", "user.name", "Agent Harness"], cwd=repo_dir, check=False)
+        subprocess.run(["git", "config", "user.email", "agent@harness.local"], cwd=repo_dir, check=False)
+        subprocess.run(["git", "add", "-A"], cwd=repo_dir, check=False)
+
+        status = subprocess.run(["git", "status", "--porcelain"], cwd=repo_dir, capture_output=True, text=True)
+        if status.stdout.strip():
+            subprocess.run(["git", "commit", "-m", msg], cwd=repo_dir, check=True, capture_output=True)
+
+        if branch:
+            subprocess.run(["git", "checkout", "-B", branch], cwd=repo_dir, check=False, capture_output=True)
+            push_cmd = ["git", "push", "-u", "origin", branch]
+        else:
+            push_cmd = ["git", "push", "origin"]
+
+        typer.echo(f"🚀 Pushing changes to remote repository...")
+        res = subprocess.run(push_cmd, cwd=repo_dir, capture_output=True, text=True)
+        if res.returncode == 0:
+            typer.echo(f"✅ Successfully pushed fixes back to remote repository!")
+            return True
+        else:
+            typer.echo(f"⚠️ Push failed (check repository credentials/permissions): {res.stderr.strip()}", err=True)
+            return False
+    except Exception as e:
+        typer.echo(f"⚠️ Failed to push changes: {e}", err=True)
+        return False
+
+
 @app.command()
 def main(
     task: str = typer.Argument(
@@ -107,6 +139,21 @@ def main(
         "--dest",
         "-d",
         help="Destination folder to clone into when repo is a git URL (defaults to ./cloned_repos/<repo_name>).",
+    ),
+    push: bool = typer.Option(
+        False,
+        "--push",
+        help="Automatically commit and push verified fixes back to the remote git repository.",
+    ),
+    push_branch: Optional[str] = typer.Option(
+        None,
+        "--push-branch",
+        help="Remote branch name to push to (e.g. fix/agent-patch). If omitted, pushes to current branch.",
+    ),
+    cleanup: bool = typer.Option(
+        False,
+        "--cleanup",
+        help="Delete the local cloned repository folder after execution (ephemeral run, leaves no local footprint).",
     ),
     model: Optional[str] = typer.Option(
         None,
@@ -195,6 +242,31 @@ def main(
         typer.echo(f"  Report        : {result.report_path}")
     if result.patch_path:
         typer.echo(f"  Patch         : {result.patch_path}")
+
+    # --- Optional: Push back to remote repository ---
+    if push:
+        if result.success:
+            _push_changes(target_repo, branch=push_branch)
+        else:
+            typer.echo("⚠️ Skipping push because verification did not succeed.")
+
+    # --- Optional: Clean up local cloned repository (ephemeral mode) ---
+    is_remote = _is_git_url(target_input)
+    if cleanup and is_remote and target_repo.exists():
+        import shutil
+        if result.report_path and Path(result.report_path).exists():
+            dest_report = Path.cwd() / "report.md"
+            if Path(result.report_path).resolve() != dest_report.resolve():
+                shutil.copy2(result.report_path, dest_report)
+                typer.echo(f"📄 Saved report to: {dest_report}")
+        if result.patch_path and Path(result.patch_path).exists():
+            dest_patch = Path.cwd() / "patch.diff"
+            if Path(result.patch_path).resolve() != dest_patch.resolve():
+                shutil.copy2(result.patch_path, dest_patch)
+                typer.echo(f"📄 Saved patch to: {dest_patch}")
+
+        typer.echo(f"🧹 Ephemeral cleanup: removing local repository at {target_repo}")
+        shutil.rmtree(target_repo, ignore_errors=True)
 
     raise typer.Exit(code=0 if result.success else 1)
 
