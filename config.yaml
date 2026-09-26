@@ -1,0 +1,33 @@
+# ─────────────────────────────────────────────────────────────
+# Coding-Agent Harness — Model Configuration
+# ─────────────────────────────────────────────────────────────
+# This file is the SINGLE source of truth for which LLM the
+# harness talks to.  To switch providers, change `model_provider`
+# and update `model_name` / `api_key_env_var` accordingly.
+# ─────────────────────────────────────────────────────────────
+
+# Which provider backend to use.
+# Supported values: "anthropic" | "google" | "openai"
+model_provider: "google"
+
+# Model identifier sent to the provider API.
+# Examples:
+#   Anthropic: "claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022"
+#   Google:    "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"
+model_name: "gemini-3.8-flash"
+
+# Name of the environment variable that holds the API key.
+# The harness reads os.environ[api_key_env_var] at runtime —
+# the actual key is NEVER stored in this file.
+# Defaults if omitted:
+#   Anthropic: "ANTHROPIC_API_KEY"
+#   Google:    "GOOGLE_API_KEY" (falls back to "GEMINI_API_KEY")
+api_key_env_var: "GOOGLE_API_KEY"
+
+# Optional: override the API base URL (for proxies, Azure, vLLM, etc.)
+# base_url: "https://custom-endpoint.example.com/v1"
+
+# Default generation parameters (can be overridden per call)
+temperature: 0.0
+max_tokens: 4096
+
