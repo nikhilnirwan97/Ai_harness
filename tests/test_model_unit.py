@@ -310,6 +310,16 @@ class TestModelOpenAI(unittest.TestCase):
                 self.assertEqual(cfg.api_key, "sk-test")
                 self.assertEqual(cfg.base_url, "https://integrate.api.nvidia.com/v1")
 
+    def test_config_ai_api_key_primary(self):
+        """Verify AI_API_KEY is prioritized as the standard hackathon environment variable."""
+        with patch("harness.model._load_dotenv_if_present"):
+            with patch.dict(os.environ, {"AI_API_KEY": "hackathon-secret-key-2026"}, clear=True):
+                cfg = ModelConfig(provider=Provider.OPENAI)
+                self.assertEqual(cfg.api_key, "hackathon-secret-key-2026")
+
+                cfg_anthropic = ModelConfig(provider=Provider.ANTHROPIC)
+                self.assertEqual(cfg_anthropic.api_key, "hackathon-secret-key-2026")
+
 
 if __name__ == "__main__":
     unittest.main()

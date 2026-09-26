@@ -110,12 +110,15 @@ class ModelConfig:
         """Resolve API key from environment if not explicitly provided."""
         if self.api_key is None:
             _load_dotenv_if_present()
-            if self.provider == Provider.ANTHROPIC:
-                self.api_key = os.environ.get("ANTHROPIC_API_KEY")
-            elif self.provider == Provider.GOOGLE:
-                self.api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
-            elif self.provider == Provider.OPENAI:
-                self.api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("NVIDIA_API_KEY")
+            # Standard hackathon environment variable has first priority
+            self.api_key = os.environ.get("AI_API_KEY")
+            if not self.api_key:
+                if self.provider == Provider.ANTHROPIC:
+                    self.api_key = os.environ.get("ANTHROPIC_API_KEY")
+                elif self.provider == Provider.GOOGLE:
+                    self.api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+                elif self.provider == Provider.OPENAI:
+                    self.api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("NVIDIA_API_KEY")
 
         if self.base_url is None and self.provider == Provider.OPENAI:
             self.base_url = os.environ.get("OPENAI_BASE_URL") or os.environ.get("OPENAI_API_BASE")
@@ -246,9 +249,14 @@ def load_config(config_path: Path | None = None) -> ModelConfig:
         Provider.OPENAI: "gpt-4o",
     }
 
-    # Resolve the API key from the named environment variable or provider default.
-    api_key_env = raw.get("api_key_env_var") or default_env_vars.get(provider, "")
-    api_key = os.environ.get(api_key_env, "") if api_key_env else ""
+    # First priority: check standard hackathon AI_API_KEY
+    api_key = os.environ.get("AI_API_KEY", "")
+    api_key_env = "AI_API_KEY" if api_key else ""
+
+    # Second priority: resolve the API key from named environment variable or provider default.
+    if not api_key:
+        api_key_env = raw.get("api_key_env_var") or default_env_vars.get(provider, "")
+        api_key = os.environ.get(api_key_env, "") if api_key_env else ""
 
     # Extra fallback for Google: also check GEMINI_API_KEY if GOOGLE_API_KEY is not set
     if not api_key and provider == Provider.GOOGLE:
@@ -265,9 +273,9 @@ def load_config(config_path: Path | None = None) -> ModelConfig:
             api_key_env = "NVIDIA_API_KEY"
 
     if not api_key:
-        hint = f"export {api_key_env}=..." if api_key_env else "export API key"
+        hint = f"export AI_API_KEY=... (or export {api_key_env}=...)" if api_key_env else "export AI_API_KEY=..."
         raise EnvironmentError(
-            f"Environment variable '{api_key_env}' is not set.  "
+            f"API key environment variable is not set.  "
             f"Export it with:  {hint}"
         )
 

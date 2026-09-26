@@ -19,13 +19,9 @@ model_provider: "openai"
 model_name: "nvidia/nemotron-3-ultra-550b-a55b"
 
 # Name of the environment variable that holds the API key.
-# The harness reads os.environ[api_key_env_var] at runtime —
-# the actual key is NEVER stored in this file.
-# Defaults if omitted:
-#   OpenAI:    "OPENAI_API_KEY" (or "NVIDIA_API_KEY" when using NVIDIA endpoint)
-#   Anthropic: "ANTHROPIC_API_KEY"
-#   Google:    "GOOGLE_API_KEY" (falls back to "GEMINI_API_KEY")
-api_key_env_var: "NVIDIA_API_KEY"
+# The evaluation environment standard is AI_API_KEY.
+# If omitted or empty, falls back to provider-specific keys (NVIDIA_API_KEY, OPENAI_API_KEY, etc.)
+api_key_env_var: "AI_API_KEY"
 
 # Optional: override the API base URL (for proxies, Azure, vLLM, NVIDIA, etc.)
 # Examples:

@@ -120,9 +120,9 @@ def _push_changes(repo_dir: Path, branch: str | None = None, commit_msg: str | N
 
 @app.command()
 def main(
-    task: str = typer.Argument(
-        ...,
-        help="Natural-language description of the coding task.",
+    task: Optional[str] = typer.Argument(
+        None,
+        help="Natural-language description of the coding task. If omitted, prompts interactively.",
     ),
     repo_arg: Optional[str] = typer.Argument(
         None,
@@ -227,7 +227,21 @@ def main(
         log_path=log_path,
     )
 
-    target_input = repo or repo_arg or "."
+    # If run interactively without CLI arguments (e.g. `make run`)
+    if not task:
+        typer.secho("==================================================", fg=typer.colors.CYAN, bold=True)
+        typer.secho("   🤖 Autonomous Coding-Agent Harness (AI 2026)   ", fg=typer.colors.GREEN, bold=True)
+        typer.secho("==================================================", fg=typer.colors.CYAN, bold=True)
+        task = typer.prompt("Enter task / GitHub issue description")
+
+    target_input = repo or repo_arg
+    if not target_input:
+        if task and not repo_arg and repo is None:
+            # If run interactively, prompt for repo
+            target_input = typer.prompt("Enter target repository (local directory or git URL)", default=".")
+        else:
+            target_input = "."
+
     target_repo = _resolve_repo(target_input, dest)
     result = run(task, target_repo, orchestrator_config)
 

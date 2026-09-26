@@ -206,38 +206,60 @@ All numbers and limits are configured in [harness/orchestrator.py](file:///Users
 
 ---
 
-## How to Run
+## Standardized Evaluation Setup (Makefile Interface)
 
-### 1. Prerequisites & Installation
+This repository strictly complies with the **AI Harness Hackathon 2026 Standardised Makefile-Based Evaluation Setup**.
 
-Requires Python 3.10+:
+### Standard Evaluator Workflow
 
 ```bash
-# Create and activate virtual environment
+git clone <TEAM_REPOSITORY>
+cd <TEAM_REPOSITORY>
+export AI_API_KEY="<PROVIDED_API_KEY>"
+make setup
+make run
+```
+
+### Makefile Commands Reference
+
+| Command | Purpose |
+| :--- | :--- |
+| `make setup` | Installs and configures all required dependencies in a virtual environment (`.venv`). |
+| `make run` | Launches the AI Harness (prompts interactively if no arguments provided, or accepts `TASK="..." REPO="..."`). |
+| `make test` | Executes the complete test suite (`pytest tests/`). |
+| `make clean` | Removes generated artifacts, cache directories (`__pycache__`, `.pytest_cache`), and temporary run files. |
+
+---
+
+## How to Run
+
+### 1. Setup & Installation
+
+Using the standardized Makefile:
+```bash
+make setup
+```
+
+Or manually with Python 3.10+:
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 2. Configure Model & Credentials
+### 2. Configure Credentials
 
-Create a `.env` file in the project root:
-
-```env
-# For NVIDIA Nemotron
-NVIDIA_API_KEY="nvapi-your-key-here"
-
-# For OpenAI
-OPENAI_API_KEY="sk-proj-your-key-here"
-
-# For Anthropic
-ANTHROPIC_API_KEY="sk-ant-your-key-here"
+The evaluation environment automatically supplies credentials via **`AI_API_KEY`**:
+```bash
+export AI_API_KEY="your-api-key-here"
 ```
 
-Configure [config.yaml](file:///Users/nikhilsingh/Ai_Harness_Hackathon/config.yaml):
+For local development, copy [.env.example](file:///Users/nikhilsingh/Ai_Harness_Hackathon/.env.example) to `.env`:
+```bash
+cp .env.example .env
+```
 
+Model settings are configured in [config.yaml](file:///Users/nikhilsingh/Ai_Harness_Hackathon/config.yaml):
 ```yaml
 # Supported values: "openai" | "anthropic" | "google"
 model_provider: "openai"
@@ -245,10 +267,10 @@ model_provider: "openai"
 # Model identifier
 model_name: "nvidia/nemotron-3-ultra-550b-a55b"
 
-# API key environment variable name
-api_key_env_var: "NVIDIA_API_KEY"
+# API key environment variable name (Hackathon standard: AI_API_KEY)
+api_key_env_var: "AI_API_KEY"
 
-# Optional base_url for NVIDIA Nemotron or local proxies
+# Base URL for NVIDIA Nemotron or OpenAI-compatible endpoints
 base_url: "https://integrate.api.nvidia.com/v1"
 
 temperature: 0.0
@@ -257,10 +279,9 @@ max_tokens: 4096
 
 ### 3. Run the Test Suite
 
-Verify that all unit and integration tests pass:
-
 ```bash
-./.venv/bin/pytest tests/
+make test
+# Or: ./.venv/bin/pytest tests/
 ```
 
 ### 4. Run the Harness on a Repository
