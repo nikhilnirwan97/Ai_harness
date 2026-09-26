@@ -92,8 +92,12 @@ def main(
         ...,
         help="Natural-language description of the coding task.",
     ),
-    repo: str = typer.Option(
-        ".",
+    repo_arg: Optional[str] = typer.Argument(
+        None,
+        help="Optional path to local repository root OR remote git URL (e.g. https://github.com/user/repo.git).",
+    ),
+    repo: Optional[str] = typer.Option(
+        None,
         "--repo",
         "-r",
         help="Path to local repository root OR remote git clone URL (e.g. https://github.com/user/repo.git).",
@@ -102,7 +106,7 @@ def main(
         None,
         "--dest",
         "-d",
-        help="Destination folder to clone into when --repo is a git URL (defaults to ./cloned_repos/<repo_name>).",
+        help="Destination folder to clone into when repo is a git URL (defaults to ./cloned_repos/<repo_name>).",
     ),
     model: Optional[str] = typer.Option(
         None,
@@ -176,7 +180,8 @@ def main(
         log_path=log_path,
     )
 
-    target_repo = _resolve_repo(repo, dest)
+    target_input = repo or repo_arg or "."
+    target_repo = _resolve_repo(target_input, dest)
     result = run(task, target_repo, orchestrator_config)
 
     # --- Print summary ---
