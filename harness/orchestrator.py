@@ -422,6 +422,12 @@ def run(
     run_error: str | None = None
 
     try:
+        # Checkpoint initial clean state for diff extraction in finalize_report
+        try:
+            git_checkpoint("pre_run_initial", root)
+        except Exception:
+            pass
+
         # ===================================================================
         # PHASE 1: EXPLORE (Runs Once)
         # ===================================================================

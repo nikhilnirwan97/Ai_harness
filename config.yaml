@@ -8,24 +8,30 @@
 
 # Which provider backend to use.
 # Supported values: "anthropic" | "google" | "openai"
-model_provider: "google"
+model_provider: "openai"
 
 # Model identifier sent to the provider API.
 # Examples:
-#   Anthropic: "claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022"
-#   Google:    "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"
-model_name: "gemini-3.8-flash"
+#   OpenAI:           "gpt-4o", "gpt-4o-mini", "gpt-4-turbo"
+#   NVIDIA Nemotron:  "nvidia/nemotron-4-340b-instruct"
+#   Anthropic:        "claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022"
+#   Google:           "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"
+model_name: "nvidia/nemotron-3-ultra-550b-a55b"
 
 # Name of the environment variable that holds the API key.
 # The harness reads os.environ[api_key_env_var] at runtime —
 # the actual key is NEVER stored in this file.
 # Defaults if omitted:
+#   OpenAI:    "OPENAI_API_KEY" (or "NVIDIA_API_KEY" when using NVIDIA endpoint)
 #   Anthropic: "ANTHROPIC_API_KEY"
 #   Google:    "GOOGLE_API_KEY" (falls back to "GEMINI_API_KEY")
-api_key_env_var: "GOOGLE_API_KEY"
+api_key_env_var: "NVIDIA_API_KEY"
 
-# Optional: override the API base URL (for proxies, Azure, vLLM, etc.)
-# base_url: "https://custom-endpoint.example.com/v1"
+# Optional: override the API base URL (for proxies, Azure, vLLM, NVIDIA, etc.)
+# Examples:
+#   OpenAI default:   leave commented out
+#   NVIDIA Nemotron:  "https://integrate.api.nvidia.com/v1"
+base_url: "https://integrate.api.nvidia.com/v1"
 
 # Default generation parameters (can be overridden per call)
 temperature: 0.0

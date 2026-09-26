@@ -43,17 +43,17 @@ def main(
         file_okay=False,
         resolve_path=True,
     ),
-    model: str = typer.Option(
-        "gpt-4o",
+    model: Optional[str] = typer.Option(
+        None,
         "--model",
         "-m",
-        help="Model identifier (e.g. gpt-4o, claude-sonnet-4-20250514, gemini-2.5-pro).",
+        help="Model identifier (defaults to config.yaml).",
     ),
-    provider: Provider = typer.Option(
-        Provider.OPENAI,
+    provider: Optional[Provider] = typer.Option(
+        None,
         "--provider",
         "-p",
-        help="LLM provider backend.",
+        help="LLM provider backend (defaults to config.yaml).",
     ),
     max_retries: int = typer.Option(
         3,
@@ -89,9 +89,23 @@ def main(
     5. **Reflect** on failures and optionally retry.
     6. **Finalize** and report results.
     """
+    from harness.model import load_config
+    try:
+        base_cfg = load_config()
+    except Exception:
+        base_cfg = ModelConfig()
+
+    effective_provider = provider if provider is not None else base_cfg.provider
+    effective_model = model if model is not None else base_cfg.default_model
+
     model_config = ModelConfig(
-        provider=provider,
-        default_model=model,
+        provider=effective_provider,
+        api_key=base_cfg.api_key,
+        base_url=base_cfg.base_url,
+        default_model=effective_model,
+        temperature=base_cfg.temperature,
+        max_tokens=base_cfg.max_tokens,
+        extra=base_cfg.extra,
     )
     orchestrator_config = OrchestratorConfig(
         model_config=model_config,

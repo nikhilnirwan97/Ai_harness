@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest.mock import MagicMock
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from harness.implement import Diff
 from harness.orchestrator import TokenBudget, Phase
@@ -180,6 +183,40 @@ class TestTelemetryAndReport(unittest.TestCase):
         self.assertIn("test_login_null", content)
         self.assertIn("AssertionError: Expected 200 got 500", content)
         self.assertIn("Run reached 90% token budget limit", content)
+
+    def test_none_logger_is_safe(self):
+        """Passing None as logger to log_transition, log_event, or close_logger does not raise."""
+        try:
+            log_transition(None, phase="explore", iteration=0, action="noop", result="ok", tokens_used=0)
+            close_logger(None)
+        except Exception as e:
+            self.fail(f"Logger operations raised unexpected exception with None: {e}")
+
+    def test_finalize_report_with_dict_plan_and_diffs(self):
+        """finalize_report works seamlessly with dict plans and diffs."""
+        plan = {
+            "root_cause": "Typo in variable name",
+            "files_to_modify": ["mod.py"],
+            "approach": "Rename foo to bar",
+        }
+        diff = {
+            "file_path": "mod.py",
+            "raw_diff_text": "--- a/mod.py\n+++ b/mod.py\n@@ -1 +1 @@\n-foo\n+bar\n",
+        }
+        artifacts = finalize_report(
+            output_dir=self.output_dir,
+            task="Rename variable",
+            plan=plan,
+            diffs=[diff],
+            success=True,
+        )
+        report = artifacts["report"].read_text(encoding="utf-8")
+        self.assertIn("Typo in variable name", report)
+        self.assertIn("mod.py", report)
+        self.assertIn("Rename foo to bar", report)
+
+        patch = artifacts["patch"].read_text(encoding="utf-8")
+        self.assertIn("+bar", patch)
 
 
 if __name__ == "__main__":

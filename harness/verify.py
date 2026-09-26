@@ -54,6 +54,8 @@ class TestFailure(dict):
       - fail["traceback_summary"] or fail.traceback_summary / fail.traceback
     """
 
+    __test__ = False
+
     def __init__(
         self,
         test_name: str = "",
@@ -128,6 +130,8 @@ class TestResult(dict):
 
     or object attribute access (.passed, .failed, .failures, .all_passed, .raw_output, etc.).
     """
+
+    __test__ = False
 
     def __init__(
         self,
@@ -290,6 +294,9 @@ class TestFramework(str, Enum):
     GO_TEST = "go_test"
     CARGO_TEST = "cargo_test"
     UNKNOWN = "unknown"
+
+
+TestFramework.__test__ = False
 
 
 def _detect_test_framework(repo_root: Path) -> TestFramework:
@@ -530,7 +537,7 @@ def _parse_pytest_text_output(raw: str) -> TestResult:
     # Parse summary line: lines containing "=+" with passed/failed/error/skipped
     for line in raw.splitlines():
         line_clean = line.strip()
-        if re.search(r"=+\s*(?:.*?\s+)?(?:passed|failed|error|skipped)", line_clean):
+        if re.search(r"\b(?:\d+\s+passed|\d+\s+failed|\d+\s+errors?|\d+\s+skipped|\d+\s+deselected)\b", line_clean):
             m_p = re.search(r"(\d+)\s+passed\b", line_clean)
             m_f = re.search(r"(\d+)\s+failed\b", line_clean)
             m_e = re.search(r"(\d+)\s+errors?\b", line_clean)
@@ -1099,3 +1106,6 @@ def test_result_to_dict(result: TestResult) -> dict[str, Any]:
         ],
         "raw_tail": result.get("raw_tail", "") if isinstance(result, dict) else getattr(result, "raw_tail", result.raw_output[-_RAW_TAIL_LIMIT:]),
     }
+
+
+test_result_to_dict.__test__ = False

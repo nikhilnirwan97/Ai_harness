@@ -115,7 +115,10 @@ class ModelConfig:
             elif self.provider == Provider.GOOGLE:
                 self.api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
             elif self.provider == Provider.OPENAI:
-                self.api_key = os.environ.get("OPENAI_API_KEY")
+                self.api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("NVIDIA_API_KEY")
+
+        if self.base_url is None and self.provider == Provider.OPENAI:
+            self.base_url = os.environ.get("OPENAI_BASE_URL") or os.environ.get("OPENAI_API_BASE")
 
 
 
@@ -254,6 +257,13 @@ def load_config(config_path: Path | None = None) -> ModelConfig:
             api_key = fallback_key
             api_key_env = "GEMINI_API_KEY"
 
+    # Extra fallback for OpenAI: also check NVIDIA_API_KEY if OPENAI_API_KEY is not set
+    if not api_key and provider == Provider.OPENAI:
+        fallback_key = os.environ.get("NVIDIA_API_KEY", "")
+        if fallback_key:
+            api_key = fallback_key
+            api_key_env = "NVIDIA_API_KEY"
+
     if not api_key:
         hint = f"export {api_key_env}=..." if api_key_env else "export API key"
         raise EnvironmentError(
@@ -263,10 +273,15 @@ def load_config(config_path: Path | None = None) -> ModelConfig:
 
     model_name = raw.get("model_name") or default_models.get(provider, "claude-sonnet-4-20250514")
 
+    # Base URL: check config file, then fallback to OPENAI_BASE_URL / OPENAI_API_BASE
+    base_url = raw.get("base_url")
+    if not base_url and provider == Provider.OPENAI:
+        base_url = os.environ.get("OPENAI_BASE_URL") or os.environ.get("OPENAI_API_BASE")
+
     return ModelConfig(
         provider=provider,
         api_key=api_key,
-        base_url=raw.get("base_url"),
+        base_url=base_url,
         default_model=model_name,
         temperature=float(raw.get("temperature", 0.0)),
         max_tokens=int(raw.get("max_tokens", 4096)),
@@ -354,10 +369,102 @@ def _call_openai(
     temperature: float,
     max_tokens: int,
 ) -> ModelResponse:
-    """OpenAI / OpenAI-compatible backend.  (Not yet implemented.)"""
-    raise NotImplementedError(
-        "OpenAI provider is not yet implemented.  "
-        "Set model_provider to 'anthropic' in config.yaml."
+    """OpenAI / OpenAI-compatible backend with tool-calling support.
+
+    Uses the ``openai`` SDK's ``chat.completions.create`` endpoint.
+    Compatible with GPT-4o, GPT-4-turbo, GPT-3.5-turbo, and any
+    OpenAI-compatible base_url (Azure, local proxies, etc.).
+    """
+    import openai  # Lazy import — only loaded when this provider is selected.
+
+    client_kwargs: dict[str, Any] = {"api_key": config.api_key}
+    if config.base_url:
+        client_kwargs["base_url"] = config.base_url
+
+    client = openai.OpenAI(**client_kwargs)
+
+    # Build the messages list — prepend a system message if provided
+    oai_messages: list[dict[str, Any]] = []
+    if system:
+        oai_messages.append({"role": "system", "content": system})
+    oai_messages.extend(messages)
+
+    create_kwargs: dict[str, Any] = {
+        "model": model or config.default_model,
+        "messages": oai_messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    if config.extra:
+        create_kwargs.update(config.extra)
+
+    # Convert Anthropic-style tool defs to OpenAI function-calling format
+    if tools:
+        oai_tools: list[dict[str, Any]] = []
+        for t in tools:
+            if isinstance(t, dict):
+                if t.get("type") == "function":
+                    # Already in OpenAI format
+                    oai_tools.append(t)
+                elif "name" in t:
+                    # Anthropic-style: {name, description, input_schema}
+                    oai_tools.append({
+                        "type": "function",
+                        "function": {
+                            "name": t["name"],
+                            "description": t.get("description", ""),
+                            "parameters": t.get("input_schema") or t.get("parameters") or {},
+                        },
+                    })
+        if oai_tools:
+            create_kwargs["tools"] = oai_tools
+            create_kwargs["tool_choice"] = "auto"
+
+    t0 = time.perf_counter()
+    response = client.chat.completions.create(**create_kwargs)
+    latency_ms = (time.perf_counter() - t0) * 1000
+
+    # Parse response
+    text_parts: list[str] = []
+    tool_calls: list[ToolCall] = []
+
+    choice = response.choices[0] if response.choices else None
+    stop_reason = ""
+    if choice:
+        stop_reason = choice.finish_reason or ""
+        msg = choice.message
+
+        if msg.content:
+            text_parts.append(msg.content)
+
+        if msg.tool_calls:
+            for tc in msg.tool_calls:
+                import json as _json
+                try:
+                    input_dict = _json.loads(tc.function.arguments or "{}")
+                except Exception:
+                    input_dict = {}
+                tool_calls.append(ToolCall(
+                    id=tc.id,
+                    name=tc.function.name,
+                    input=input_dict,
+                ))
+
+    usage_data = response.usage
+    usage = TokenUsage(
+        prompt_tokens=getattr(usage_data, "prompt_tokens", 0) or 0,
+        completion_tokens=getattr(usage_data, "completion_tokens", 0) or 0,
+        total_tokens=getattr(usage_data, "total_tokens", 0) or 0,
+    )
+
+    return ModelResponse(
+        text="\n".join(text_parts),
+        tool_calls=tool_calls,
+        usage=usage,
+        model=response.model or (model or config.default_model),
+        latency_ms=latency_ms,
+        stop_reason=stop_reason,
+        raw=response,
     )
 
 
@@ -544,10 +651,12 @@ def call_model(
     *,
     tools: list[dict[str, Any]] | None = None,
     system: str | None = None,
+    system_prompt: str | None = None,
     config: ModelConfig | None = None,
     model: str | None = None,
     temperature: float | None = None,
     max_tokens: int | None = None,
+    **kwargs: Any,
 ) -> ModelResponse:
     """Send messages to the configured LLM and return a structured response.
 
@@ -560,17 +669,18 @@ def call_model(
       - Latency measurement
 
     Args:
-        messages:    List of message dicts, each with ``role`` and ``content``
-                     keys (e.g. ``[{"role": "user", "content": "Hello"}]``).
-        tools:       Optional list of tool definitions for tool-calling.
-                     Format follows the Anthropic tool schema:
-                     ``{"name": …, "description": …, "input_schema": {…}}``.
-        system:      Optional system-level instruction.
-        config:      Explicit :class:`ModelConfig`.  When ``None``, the config
-                     is loaded from ``config.yaml`` (cached after first load).
-        model:       Override the model identifier for this single call.
-        temperature: Override the sampling temperature for this call.
-        max_tokens:  Override the max tokens for this call.
+        messages:      List of message dicts, each with ``role`` and ``content``
+                       keys (e.g. ``[{"role": "user", "content": "Hello"}]``).
+        tools:         Optional list of tool definitions for tool-calling.
+                       Format follows the Anthropic tool schema:
+                       ``{"name": …, "description": …, "input_schema": {…}}``.
+        system:        Optional system-level instruction.
+        system_prompt: Alias for ``system``.
+        config:        Explicit :class:`ModelConfig`.  When ``None``, the config
+                       is loaded from ``config.yaml`` (cached after first load).
+        model:         Override the model identifier for this single call.
+        temperature:   Override the sampling temperature for this call.
+        max_tokens:    Override the max tokens for this call.
 
     Returns:
         A :class:`ModelResponse` containing the text, any tool calls,
@@ -582,10 +692,12 @@ def call_model(
     if dispatch_fn is None:
         raise ValueError(f"Unsupported provider: {cfg.provider!r}")
 
+    eff_system = system or system_prompt or kwargs.get("system_prompt")
+
     return dispatch_fn(
         messages,
         tools=tools,
-        system=system,
+        system=eff_system,
         config=cfg,
         model=model,
         temperature=temperature if temperature is not None else cfg.temperature,

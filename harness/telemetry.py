@@ -135,16 +135,18 @@ def init_logger(log_path: Path | str, *, session_id: str | None = None) -> Telem
     )
 
 
-def log_event(logger: TelemetryLogger, event: TelemetryEvent) -> None:
+def log_event(logger: TelemetryLogger | None, event: TelemetryEvent) -> None:
     """Append a single :class:`TelemetryEvent` to the JSONL log.
 
     The event is serialised as a single JSON line and flushed immediately
     so that partial runs are still observable.
 
     Args:
-        logger: An initialised :class:`TelemetryLogger`.
+        logger: An initialised :class:`TelemetryLogger` (or None to no-op).
         event:  The event to record.
     """
+    if logger is None:
+        return
     if logger._handle is None or logger._handle.closed:
         logger._handle = open(logger.log_path, mode="a", encoding="utf-8")
 
@@ -157,7 +159,7 @@ def log_event(logger: TelemetryLogger, event: TelemetryEvent) -> None:
 
 
 def log_transition(
-    logger: TelemetryLogger,
+    logger: TelemetryLogger | None,
     *,
     phase: str,
     iteration: int,
@@ -173,7 +175,7 @@ def log_transition(
         timestamp, phase, iteration, action, result, tokens_used
 
     Args:
-        logger:      The active telemetry logger.
+        logger:      The active telemetry logger (or None to no-op).
         phase:       Current phase name (e.g. "explore", "plan", "implement").
         iteration:   Current attempt/loop iteration count.
         action:      Specific action taken in this phase.
@@ -183,6 +185,8 @@ def log_transition(
         error:       Optional error string if failed.
         **extra:     Arbitrary additional context to include.
     """
+    if logger is None:
+        return
     event = TelemetryEvent(
         phase=phase,
         timestamp=datetime.now(timezone.utc).isoformat(),
@@ -197,14 +201,16 @@ def log_transition(
     log_event(logger, event)
 
 
-def close_logger(logger: TelemetryLogger) -> None:
+def close_logger(logger: TelemetryLogger | None) -> None:
     """Flush and close the underlying log file.
 
-    Safe to call multiple times.
+    Safe to call multiple times or with None.
 
     Args:
-        logger: The logger to close.
+        logger: The logger to close (or None).
     """
+    if logger is None:
+        return
     if logger._handle is not None and not logger._handle.closed:
         try:
             logger._handle.flush()
@@ -298,7 +304,7 @@ def finalize_report(
                 )
                 if tag_check.returncode == 0:
                     res = subprocess.run(
-                        ["git", "diff", tag, "HEAD"],
+                        ["git", "diff", tag],
                         cwd=root_p,
                         capture_output=True,
                         text=True,
@@ -307,6 +313,16 @@ def finalize_report(
                     if res.returncode == 0 and res.stdout.strip():
                         patch_content = res.stdout
                         break
+            if not patch_content:
+                res = subprocess.run(
+                    ["git", "diff", "HEAD"],
+                    cwd=root_p,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if res.returncode == 0 and res.stdout.strip():
+                    patch_content = res.stdout
             if not patch_content:
                 res = subprocess.run(
                     ["git", "diff", "HEAD~1"],
@@ -323,7 +339,10 @@ def finalize_report(
     if not patch_content and diffs:
         diff_chunks = []
         for d in diffs:
-            chunk = getattr(d, "raw_diff_text", None) or getattr(d, "diff_text", None) or str(d)
+            if isinstance(d, dict):
+                chunk = d.get("raw_diff_text") or d.get("diff_text") or d.get("patch") or str(d)
+            else:
+                chunk = getattr(d, "raw_diff_text", None) or getattr(d, "diff_text", None) or str(d)
             if chunk and chunk.strip():
                 diff_chunks.append(chunk.strip())
         if diff_chunks:
