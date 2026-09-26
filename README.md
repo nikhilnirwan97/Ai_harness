@@ -299,24 +299,48 @@ Execute `main.py` specifying the task and target repository:
   --cleanup
 ```
 
-#### CLI Options
+> [!IMPORTANT]
+> **Understanding `--cleanup`:**
+> - When `--cleanup` is supplied, the harness treats the run as ephemeral: it automatically removes the cloned directory (`./cloned_repos/<repo_name>`) upon completion to prevent consuming local disk space.
+> - **Artifact Preservation**: Before deleting the directory, the harness automatically copies `report.md` and `patch.diff` into your project root so results are never lost.
+> - **Keeping the Local Files**: If you want the cloned folder to remain on your machine to inspect the modified code locally, **omit `--cleanup`**:
+>   ```bash
+>   ./.venv/bin/python main.py "Fix all bugs" https://github.com/username/project-name.git
+>   ```
+>   The repository will remain accessible under `./cloned_repos/<repo_name>/`.
+
+> [!WARNING]
+> **GitHub Push Permissions (`--push`):**
+> - The `--push` flag uses your local git credentials to push commits directly to the remote repository.
+> - **Write Access Required**: You must have write/collaborator permissions on the remote repository. If you attempt to push to another user's repository (e.g., `https://github.com/mayankyadav1123/capstoneproject`), GitHub will reject it with:
+>   `remote: Permission to <owner>/<repo>.git denied to <your-username>.`
+> - **How to Push to Third-Party Repositories**:
+>   1. **Fork the repo** to your own GitHub account (`https://github.com/<your-username>/<repo>`).
+>   2. Run the harness against your fork URL:
+>      ```bash
+>      ./.venv/bin/python main.py "Fix all bugs" https://github.com/<your-username>/<repo>.git --push
+>      ```
+>   3. Alternatively, ask the repository owner to add your GitHub username as a **Collaborator with Write access** in repository settings.
+
+#### CLI Options Reference
 
 - `repo_arg` / `--repo, -r`: Path to local repository root OR remote git clone URL (e.g. `https://github.com/user/repo.git`, default: `.`).
 - `--dest, -d`: Destination folder to clone into when `--repo` is a remote git URL (defaults to `./cloned_repos/<repo_name>`).
-- `--push`: Automatically commit and push verified fixes back to the remote git repository.
+- `--push`: Automatically commit and push verified fixes back to the remote git repository (requires write permissions).
 - `--push-branch`: Remote branch name to push to (e.g. `fix/agent-patch`). Defaults to current branch.
-- `--cleanup`: Delete the local cloned repository folder after execution (ephemeral run, zero local disk footprint).
-- `--model, -m`: Override model identifier.
+- `--cleanup`: Delete the local cloned repository folder after execution (ephemeral run, zero local disk footprint). Preserves `report.md` and `patch.diff` in project root.
+- `--model, -m`: Override model identifier (e.g. `nvidia/nemotron-3-ultra-550b-a55b`).
 - `--provider, -p`: Override model provider (`openai`, `anthropic`, `google`).
 - `--max-retries`: Maximum Implement $\rightarrow$ Verify retry attempts (default: `3`).
-- `--test-cmd`: Explicit test command override (e.g. `pytest tests/test_core.py`).
-- `--linter-cmd`: Explicit linter command override (e.g. `ruff check .`).
+- `--test-cmd`: Explicit test command override (e.g. `pytest tests/test_core.py` or `npm test`).
+- `--linter-cmd`: Explicit linter command override (e.g. `ruff check .` or `eslint .`).
 - `--log`: Output path for the JSONL telemetry log (default: `harness_run.jsonl`).
 
 ### 5. Inspect Generated Artifacts
 
-Upon completion, three files are written to the target repository:
+Upon completion, three files are written to the target repository (or copied to the project root if `--cleanup` is used):
 
 1. **`report.md`**: Human-readable executive summary covering root cause found, changes made, test table before and after, unresolved items, and total tokens used.
 2. **`patch.diff`**: Clean unified diff representing all applied modifications.
 3. **`telemetry.jsonl`**: Machine-readable chronological trace of phase transitions, latency, token consumption, and subprocess results.
+
